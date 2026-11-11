@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pills Reminder · The Cozy Toolbox</title>
+  <meta name="description" content="Set daily medicine times and get gentle browser notifications while this page is open.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body class="app-page" data-root=".." style="--accent:#FF6B57; --accent-soft:#FFE7E3;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/pill.png" alt="">
+      <div>
+        <h1>Pills Reminder</h1>
+        <p>Gentle nudges so no dose ever gets forgotten.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>⏰ Next dose</h2>
+      <div class="next-dose-card" id="next-dose">
+        <img src="../assets/img/alarm-clock.png" alt="" style="width:46px;height:46px;">
+        <div>
+          <div class="clock" id="next-dose-time">—</div>
+          <div class="hint" id="next-dose-sub">Add a medicine below to get started.</div>
+        </div>
+      </div>
+      <div class="notif-note" id="notif-note">
+        <span style="font-size:1.1rem;">🔔</span>
+        <span>Reminders pop up while this tab stays open.
+          <button class="btn btn-sm" id="notif-btn" style="margin-left:6px;">Enable notifications</button>
+          <span class="hint" id="notif-state"></span>
+        </span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>➕ Add a medicine</h2>
+      <div class="form-row">
+        <div class="field">
+          <label for="med-name">Medicine name</label>
+          <input id="med-name" class="input" type="text" placeholder="e.g. Vitamin D" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="med-dose">Dose (optional)</label>
+          <input id="med-dose" class="input" type="text" placeholder="e.g. 1 tablet" maxlength="40">
+        </div>
+        <div class="field">
+          <label for="med-time">Time</label>
+          <input id="med-time" class="input" type="time" value="08:00">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" id="add-time-btn">＋ Add time</button>
+        </div>
+      </div>
+      <div class="med-times" id="pending-times"></div>
+      <button class="btn" id="save-med-btn" style="margin-top:16px;">💊 Save medicine</button>
+    </section>
+
+    <section class="panel">
+      <h2>💊 My medicines <span class="hint" id="med-count"></span></h2>
+      <div class="item-list" id="med-list"></div>
+      <div class="empty-state" id="med-empty">No medicines yet — add your first one above 🌷</div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      const meds = CB.store.get("pills:meds", []);
+      const pendingTimes = [];
+      let firedThisSession = new Set();
+
+      const $name = document.getElementById("med-name");
+      const $dose = document.getElementById("med-dose");
+      const $time = document.getElementById("med-time");
+      const $pending = document.getElementById("pending-times");
+      const $list = document.getElementById("med-list");
+      const $empty = document.getElementById("med-empty");
+      const $count = document.getElementById("med-count");
+
+      /* ---------- notification ---------- */
+      function notifState() {
+        const s = document.getElementById("notif-state");
+        if (!("Notification" in window)) {
+          s.textContent = " (This browser has no notification support — toasts still work.)";
+          document.getElementById("notif-btn").disabled = true;
+          return;
+        }
+        s.textContent = Notification.permission === "granted" ? " ✓ enabled"
+          : Notification.permission === "denied" ? " (blocked in browser settings)" : "";
+      }
+      document.getElementById("notif-btn").addEventListener("click", () => {
+        if (!("Notification" in window)) return;
+        Notification.requestPermission().then(p => {
+          notifState();
+          if (p === "granted") { CB.toast("🔔 Notifications enabled!"); new Notification("The Cozy Toolbox", { body: "Pills reminders are on! 🌟" }); }
+        });
+      });
+
+      function notify(med, timeStr) {
+        CB.toast(`💊 Time for ${med.name}${med.dose ? " — " + med.dose : ""}!`);
+        CB.confetti(window.innerWidth / 2, window.innerHeight * 0.3, 40);
+        if ("Notification" in window && Notification.permission === "granted") {
+          try {
+            new Notification(`💊 ${med.name}${med.dose ? " · " + med.dose : ""}`, {
+              body: `It's ${timeStr} — time for your dose!`,
+              tag: "cozy-pill-" + med.id
+            });
+          } catch (e) { /* some browsers need SW; toast already fired */ }
+        }
+      }
+
+      /* ---------- due checker (runs while tab is open) ---------- */
+      function pad(n) { return String(n).padStart(2, "0"); }
+      function checkDue() {
+        const now = new Date();
+        const key = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        meds.forEach(med => {
+          if (!med.active) return;
+          med.times.forEach(t => {
+            const [h, m] = t.split(":").map(Number);
+            const due = new Date(now); due.setHours(h, m, 0, 0);
+            const stamp = `${med.id}|${key(now)}|${t}`;
+            const minsLate = (now - due) / 60000;
+            if (firedThisSession.has(stamp)) return;
+            if (minsLate >= 0) {
+              firedThisSession.add(stamp);
+              if (minsLate <= 60) notify(med, t);   // don't spam for long-missed doses
+            }
+          });
+        });
+        renderNext();
+      }
+
+      /* ---------- next dose card ---------- */
+      function renderNext() {
+        const now = new Date();
+        let best = null;
+        meds.filter(m => m.active).forEach(m => m.times.forEach(t => {
+          const [h, mi] = t.split(":").map(Number);
+          const d = new Date(now); d.setHours(h, mi, 0, 0);
+          if (d <= now) d.setDate(d.getDate() + 1);
+          if (!best || d < best.d) best = { d, med: m, t };
+        }));
+        const $t = document.getElementById("next-dose-time");
+        const $s = document.getElementById("next-dose-sub");
+        if (!best) {
+          $t.textContent = "—"; $s.textContent = "Add a medicine below to get started."; return;
+        }
+        const mins = Math.round((best.d - now) / 60000);
+        const inTxt = mins >= 60
+          ? `${Math.floor(mins / 60)}h ${mins % 60}m from now`
+          : `${mins} min from now`;
+        $t.textContent = `${best.t}`;
+        $s.textContent = `${best.med.name}${best.med.dose ? " · " + best.med.dose : ""} — ${inTxt}`;
+      }
+
+      /* ---------- add form ---------- */
+      function renderPending() {
+        $pending.innerHTML = pendingTimes.length
+          ? pendingTimes.map((t, i) =>
+            `<span class="time-chip">🕒 ${t}<button data-i="${i}" title="Remove" aria-label="Remove time ${t}">✕</button></span>`).join("")
+          : `<span class="hint">No times yet — pick a time and press “Add time”.</span>`;
+      }
+      document.getElementById("add-time-btn").addEventListener("click", () => {
+        const v = $time.value;
+        if (!v) return CB.toast("Pick a time first 🕒");
+        if (pendingTimes.includes(v)) return CB.toast("That time is already added 🙂");
+        pendingTimes.push(v); pendingTimes.sort();
+        renderPending();
+      });
+      $pending.addEventListener("click", e => {
+        const b = e.target.closest("button[data-i]");
+        if (!b) return;
+        pendingTimes.splice(+b.dataset.i, 1); renderPending();
+      });
+
+      document.getElementById("save-med-btn").addEventListener("click", () => {
+        const name = $name.value.trim();
+        if (!name) return CB.toast("Give the medicine a name 💊");
+        if (!pendingTimes.length) return CB.toast("Add at least one time 🕒");
+        meds.push({ id: CB.uid(), name, dose: $dose.value.trim(), times: [...pendingTimes], active: true });
+        CB.store.set("pills:meds", meds);
+        $name.value = ""; $dose.value = "";
+        pendingTimes.length = 0; renderPending();
+        renderList(); renderNext(); checkDue();
+        CB.toast(`💊 ${name} saved — we'll nudge you!`);
+      });
+
+      /* ---------- med list ---------- */
+      function renderList() {
+        $count.textContent = meds.length ? `· ${meds.length} saved` : "";
+        $empty.style.display = meds.length ? "none" : "block";
+        $list.innerHTML = meds.map(m => `
+          <div class="item" style="--accent:#FF6B57">
+            <div class="grow">
+              <div class="item-title">${CB.esc(m.name)}${m.active ? "" : '<span class="paused-tag">paused</span>'}</div>
+              <div class="item-sub">${m.dose ? CB.esc(m.dose) + " · " : ""}${m.times.join(" · ")}</div>
+            </div>
+            <button class="icon-btn" data-act="toggle" data-id="${m.id}" title="${m.active ? "Pause reminders" : "Resume reminders"}">${m.active ? "⏸️" : "▶️"}</button>
+            <button class="icon-btn" data-act="del" data-id="${m.id}" title="Delete" aria-label="Delete ${CB.esc(m.name)}">🗑️</button>
+          </div>`).join("");
+      }
+      $list.addEventListener("click", e => {
+        const b = e.target.closest("button[data-act]");
+        if (!b) return;
+        const idx = meds.findIndex(m => m.id === b.dataset.id);
+        if (idx < 0) return;
+        if (b.dataset.act === "del") {
+          meds.splice(idx, 1);
+          CB.toast("Removed 🗑️");
+        } else {
+          meds[idx].active = !meds[idx].active;
+          CB.toast(meds[idx].active ? "▶️ Reminders resumed" : "⏸️ Reminders paused");
+        }
+        CB.store.set("pills:meds", meds);
+        renderList(); renderNext();
+      });
+
+      renderPending(); renderList(); notifState(); checkDue();
+      setInterval(checkDue, 30000);   // heartbeat while the tab is open
+    })();
+  </script>
+</body>
+</html>

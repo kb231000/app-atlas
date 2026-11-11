@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unit Converter · The Cozy Toolbox</title>
+  <meta name="description" content="Convert length, mass, temperature, volume, area, speed and data units instantly.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body class="app-page" data-root=".." style="--accent:#2EC4B6; --accent-soft:#DFF6F3;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/ruler.png" alt="">
+      <div>
+        <h1>Unit Converter</h1>
+        <p>Metric ↔ imperial, instantly. Pick a category and type away.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="tabs" id="cat-tabs"></div>
+
+      <div class="form-row" style="grid-template-columns: 1fr auto 1fr; gap:10px;">
+        <div class="field">
+          <label for="from-unit">From</label>
+          <select id="from-unit" class="select"></select>
+        </div>
+        <button class="swap-btn" id="swap" title="Swap units" style="margin-top:auto;">⇄</button>
+        <div class="field">
+          <label for="to-unit">To</label>
+          <select id="to-unit" class="select"></select>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label for="from-val">Value</label>
+          <input id="from-val" class="input" type="number" step="any" value="1" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label>Quick examples</label>
+          <div class="chips" id="quick-chips"></div>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div class="sub" id="result-readout">1 Meter = 0.000621371 Miles</div>
+        <div class="big" id="result-big">0.000621371</div>
+      </div>
+      <p class="hint" style="margin-top:10px; text-align:center;">Results update as you type · ⇄ swaps the units</p>
+    </section>
+
+    <section class="panel">
+      <h2>📖 Handy reference</h2>
+      <div class="cat-breakdown" id="ref-list"></div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const CATS = {
+        "Length": { emoji: "📏", units: { "Millimeters": 0.001, "Centimeters": 0.01, "Meters": 1, "Kilometers": 1000, "Inches": 0.0254, "Feet": 0.3048, "Yards": 0.9144, "Miles": 1609.344 }, base: "Meters", samples: [1, 10, 100, 1000] },
+        "Mass": { emoji: "⚖️", units: { "Milligrams": 1e-6, "Grams": 0.001, "Kilograms": 1, "Tonnes": 1000, "Ounces": 0.028349523125, "Pounds": 0.45359237, "Stones": 6.35029318 }, base: "Kilograms", samples: [1, 10, 50, 100] },
+        "Temperature": { emoji: "🌡️", special: true, units: ["Celsius", "Fahrenheit", "Kelvin"], samples: [0, 20, 37, 100] },
+        "Volume": { emoji: "🥛", units: { "Milliliters": 0.001, "Liters": 1, "Cubic meters": 1000, "Teaspoons (US)": 0.00492892159, "Tablespoons (US)": 0.0147867648, "Fluid ounces (US)": 0.0295735296, "Cups (US)": 0.2365882365, "Pints (US)": 0.473176473, "Quarts (US)": 0.946352946, "Gallons (US)": 3.785411784 }, base: "Liters", samples: [1, 4, 250, 1000] },
+        "Area": { emoji: "🗺️", units: { "Square centimeters": 1e-4, "Square meters": 1, "Square kilometers": 1e6, "Square feet": 0.09290304, "Square yards": 0.83612736, "Square miles": 2589988.110336, "Acres": 4046.8564224, "Hectares": 10000 }, base: "Square meters", samples: [1, 100, 10000, 1000000] },
+        "Speed": { emoji: "🚀", units: { "Meters/second": 1, "Kilometers/hour": 1 / 3.6, "Miles/hour": 0.44704, "Knots": 0.514444, "Feet/second": 0.3048 }, base: "Meters/second", samples: [1, 10, 60, 100] },
+        "Data": { emoji: "💾", units: { "Bits": 0.125, "Bytes": 1, "Kilobytes (1000 B)": 1e3, "Megabytes (1000 KB)": 1e6, "Gigabytes (1000 MB)": 1e9, "Terabytes (1000 GB)": 1e12, "Kibibytes (1024 B)": 1024, "Mebibytes (1024 KiB)": 1048576, "Gibibytes (1024 MiB)": 1073741824 }, base: "Bytes", samples: [1, 1024, 1e6, 1e9] }
+      };
+
+      /* temperature helpers — to/from Celsius as pivot */
+      const toC = { Celsius: v => v, Fahrenheit: v => (v - 32) * 5 / 9, Kelvin: v => v - 273.15 };
+      const fromC = { Celsius: v => v, Fahrenheit: v => v * 9 / 5 + 32, Kelvin: v => v + 273.15 };
+
+      const tabsBox = document.getElementById("cat-tabs");
+      const fromUnit = document.getElementById("from-unit");
+      const toUnit = document.getElementById("to-unit");
+      const fromVal = document.getElementById("from-val");
+      const big = document.getElementById("result-big");
+      const readout = document.getElementById("result-readout");
+      const refList = document.getElementById("ref-list");
+      const quickChips = document.getElementById("quick-chips");
+
+      let cat = "Length";
+
+      function unitsOf(c) { return Object.keys(CATS[c].units); }
+
+      function fillTabs() {
+        tabsBox.innerHTML = Object.keys(CATS).map(c =>
+          `<button class="tab${c === cat ? " active" : ""}" data-cat="${c}">${CATS[c].emoji} ${c}</button>`).join("");
+      }
+
+      function fillUnits(keep) {
+        const opts = unitsOf(cat).map(u => `<option value="${u}">${u}</option>`).join("");
+        fromUnit.innerHTML = opts;
+        toUnit.innerHTML = opts;
+        const us = unitsOf(cat);
+        if (cat === "Temperature") { fromUnit.value = "Celsius"; toUnit.value = "Fahrenheit"; }
+        else if (keep && us.includes(keep.from) && us.includes(keep.to)) { fromUnit.value = keep.from; toUnit.value = keep.to; }
+        else { fromUnit.value = us[0]; toUnit.value = us[1] || us[0]; }
+      }
+
+      function convert(v, from, to) {
+        if (CATS[cat].special) {
+          if (from === to) return v;
+          return fromC[to](toC[from](v));
+        }
+        return v * CATS[cat].units[from] / CATS[cat].units[to];
+      }
+
+      function fmt(x) {
+        if (!isFinite(x)) return "—";
+        if (x !== 0 && (Math.abs(x) < 1e-4 || Math.abs(x) >= 1e9)) return x.toExponential(4);
+        return Number(x.toPrecision(9)).toLocaleString(undefined, { maximumFractionDigits: 6 });
+      }
+
+      function update() {
+        const v = parseFloat(fromVal.value);
+        const from = fromUnit.value, to = toUnit.value;
+        const eq = (from === to);
+        const one = convert(1, from, to);
+        if (isNaN(v)) {
+          big.textContent = "…";
+          readout.textContent = `1 ${from} = ${fmt(one)} ${to}`;
+          return;
+        }
+        const out = convert(v, from, to);
+        big.textContent = `${fmt(out)} ${to}`;
+        readout.textContent = eq
+          ? `${fmt(v)} ${from} = ${fmt(out)} ${to}`
+          : `${fmt(v)} ${from} = ${fmt(out)} ${to}  ·  (1 ${from} = ${fmt(one)} ${to})`;
+        renderQuick();
+        renderRef(v, from);
+      }
+
+      function renderQuick() {
+        const samples = CATS[cat].samples || [1, 10, 100];
+        quickChips.innerHTML = samples.map(s =>
+          `<button class="chip" data-v="${s}">${s}</button>`).join("");
+      }
+
+      function renderRef(v, from) {
+        const us = unitsOf(cat);
+        if (isNaN(v)) v = 1;
+        refList.innerHTML = us.filter(u => u !== from).slice(0, 6).map(u =>
+          `<div class="cat-row"><span>${u}</span>
+             <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, Math.abs(convert(v, from, u)) / Math.max(...us.map(x => Math.abs(convert(v, from, x)))) * 100 || 0)}%"></div></div>
+             <span class="amt">${fmt(convert(v, from, u))}</span></div>`).join("");
+      }
+
+      tabsBox.addEventListener("click", e => {
+        const t = e.target.closest(".tab");
+        if (!t) return;
+        cat = t.dataset.cat;
+        fillTabs(); fillUnits(); update();
+      });
+      fromUnit.addEventListener("change", update);
+      toUnit.addEventListener("change", update);
+      fromVal.addEventListener("input", update);
+      document.getElementById("swap").addEventListener("click", () => {
+        const a = fromUnit.value; fromUnit.value = toUnit.value; toUnit.value = a; update();
+      });
+      quickChips.addEventListener("click", e => {
+        const c = e.target.closest(".chip"); if (!c) return;
+        fromVal.value = c.dataset.v; update();
+      });
+
+      fillTabs(); fillUnits(); update();
+    })();
+  </script>
+</body>
+</html>

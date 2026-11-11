@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMI Calculator · The Cozy Toolbox</title>
+  <meta name="description" content="Work out your Body Mass Index with a friendly color gauge.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .bmi-cat { display: inline-block; font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; color: #fff; border-radius: 999px; padding: 6px 18px; margin-top: 8px; }
+    .bmi-healthy { margin-top: 10px; font-weight: 800; color: var(--ink-soft); font-size: .9rem; }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#7BC950; --accent-soft:#EDF8E4;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/scale.png" alt="">
+      <div>
+        <h1>BMI Calculator</h1>
+        <p>A friendly read on where your body balance sits.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>📏 Your numbers</h2>
+      <div class="tabs" id="sys-tabs">
+        <button class="tab active" data-sys="metric">Metric (kg · cm)</button>
+        <button class="tab" data-sys="imperial">Imperial (lb · ft/in)</button>
+      </div>
+
+      <div id="metric-form">
+        <div class="form-row">
+          <div class="field">
+            <label for="kg">Weight — kilograms</label>
+            <input id="kg" class="input" type="number" step="any" min="1" placeholder="70" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label for="cm">Height — centimeters</label>
+            <input id="cm" class="input" type="number" step="any" min="20" placeholder="170" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <div id="imperial-form" style="display:none;">
+        <div class="form-row">
+          <div class="field">
+            <label for="lb">Weight — pounds</label>
+            <input id="lb" class="input" type="number" step="any" min="1" placeholder="155" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label for="ft">Height — feet</label>
+            <input id="ft" class="input" type="number" step="1" min="1" max="8" placeholder="5" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="in">+ inches</label>
+            <input id="in" class="input" type="number" step="any" min="0" max="11.9" placeholder="7" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 240 132" width="360" role="img" aria-label="BMI gauge">
+          <g id="gauge-segs" stroke-linecap="round" fill="none" stroke-width="17"></g>
+          <g id="needle" style="transform-origin:120px 116px;">
+            <line x1="120" y1="116" x2="120" y2="34" stroke="#40302B" stroke-width="5" stroke-linecap="round"/>
+          </g>
+          <circle cx="120" cy="116" r="10" fill="#40302B"/>
+          <text x="14" y="128" font-size="11" font-weight="700" fill="#8A736B" font-family="Nunito">10</text>
+          <text x="212" y="128" font-size="11" font-weight="700" fill="#8A736B" font-family="Nunito">40</text>
+        </svg>
+      </div>
+
+      <div class="result-box">
+        <div class="big" id="bmi-value">—</div>
+        <div class="bmi-cat" id="bmi-cat" style="display:none;"></div>
+        <div class="bmi-healthy" id="bmi-healthy"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>🧮 How it's read</h2>
+      <p class="hint">BMI = weight (kg) ÷ height² (m). It's a gentle screening guide — it doesn't measure body fat directly,
+        so treat it as one friendly signal, not a verdict. 💛</p>
+      <div class="cat-breakdown" style="margin-top:14px;">
+        <div class="cat-row"><span style="color:#6C7BF0">Under 18.5</span><div class="bar-track"><div class="bar-fill" style="width:30%;background:#6C7BF0"></div></div><span class="amt">Underweight</span></div>
+        <div class="cat-row"><span style="color:#5da332">18.5 – 24.9</span><div class="bar-track"><div class="bar-fill" style="width:60%;background:#7BC950"></div></div><span class="amt">Normal</span></div>
+        <div class="cat-row"><span style="color:#d99a1f">25 – 29.9</span><div class="bar-track"><div class="bar-fill" style="width:80%;background:#FFB238"></div></div><span class="amt">Overweight</span></div>
+        <div class="cat-row"><span style="color:#e04b38">30 +</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:#FF6B57"></div></div><span class="amt">Obesity</span></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      const LB_PER_KG = 2.2046226218, CM_PER_IN = 2.54;
+
+      const saved = CB.store.get("bmi:state", { sys: "metric", kg: "", cm: "", lb: "", ft: "", inch: "" });
+      let sys = saved.sys === "imperial" ? "imperial" : "metric";
+
+      const $ = id => document.getElementById(id);
+      const els = { kg: $("kg"), cm: $("cm"), lb: $("lb"), ft: $("ft"), inch: $("in") };
+
+      /* ---------- gauge drawing ---------- */
+      const CX = 120, CY = 116, R = 92;
+      const pt = frac => {
+        const a = Math.PI * (1 - frac);           // frac 0 = left, 1 = right
+        return [CX + R * Math.cos(a), CY - R * Math.sin(a)];
+      };
+      function segPath(f1, f2) {
+        const [x1, y1] = pt(f1), [x2, y2] = pt(f2);
+        return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R} ${R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+      }
+      function drawGauge() {
+        const BMIN = 10, BMAX = 40;
+        const f = b => (b - BMIN) / (BMAX - BMIN);
+        const segs = [
+          [BMIN, 18.5, "#6C7BF0"], [18.5, 25, "#7BC950"], [25, 30, "#FFB238"], [30, BMAX, "#FF6B57"]
+        ];
+        document.getElementById("gauge-segs").innerHTML = segs.map(([a, b, c]) =>
+          `<path d="${segPath(f(a), f(b))}" stroke="${c}"/>`).join("");
+      }
+
+      /* ---------- categories ---------- */
+      function category(bmi) {
+        if (bmi < 18.5) return { name: "Underweight", color: "#6C7BF0" };
+        if (bmi < 25) return { name: "Normal weight", color: "#5da332" };
+        if (bmi < 30) return { name: "Overweight", color: "#d99a1f" };
+        return { name: "Obesity", color: "#e04b38" };
+      }
+
+      function readBmi() {
+        let kg, m;
+        if (sys === "metric") {
+          kg = parseFloat(els.kg.value); m = parseFloat(els.cm.value) / 100;
+        } else {
+          kg = parseFloat(els.lb.value) / LB_PER_KG;
+          m = (parseFloat(els.ft.value) * 12 + (parseFloat(els.inch.value) || 0)) * CM_PER_IN / 100;
+        }
+        if (!kg || !m || kg <= 0 || m <= 0.2) return null;
+        return { bmi: kg / (m * m), kg, m };
+      }
+
+      function update() {
+        CB.store.set("bmi:state", { sys, ...Object.fromEntries(Object.entries(els).map(([k, e]) => [k, e.value])) });
+        const r = readBmi();
+        const val = $("bmi-value"), cat = $("bmi-cat"), healthy = $("bmi-healthy");
+        if (!r) {
+          val.textContent = "—";
+          cat.style.display = "none"; healthy.textContent = "";
+          document.getElementById("needle").style.transform = "rotate(-90deg)";
+          return;
+        }
+        const frac = Math.max(0, Math.min(1, (r.bmi - 10) / 30));
+        document.getElementById("needle").style.transform = `rotate(${frac * 180 - 90}deg)`;
+        val.textContent = r.bmi.toFixed(1);
+        const c = category(r.bmi);
+        cat.style.display = "inline-block";
+        cat.textContent = c.name; cat.style.background = c.color;
+        const lo = 18.5 * r.m * r.m, hi = 24.9 * r.m * r.m;
+        healthy.textContent = sys === "metric"
+          ? `A healthy weight for your height is about ${lo.toFixed(1)} – ${hi.toFixed(1)} kg`
+          : `A healthy weight for your height is about ${(lo * LB_PER_KG).toFixed(0)} – ${(hi * LB_PER_KG).toFixed(0)} lb`;
+      }
+
+      /* ---------- system toggle ---------- */
+      function setSys(s) {
+        sys = s;
+        CB.$$(".tab", $("sys-tabs")).forEach(t => t.classList.toggle("active", t.dataset.sys === s));
+        $("metric-form").style.display = s === "metric" ? "block" : "none";
+        $("imperial-form").style.display = s === "imperial" ? "block" : "none";
+        update();
+      }
+      $("sys-tabs").addEventListener("click", e => {
+        const t = e.target.closest(".tab"); if (t) setSys(t.dataset.sys);
+      });
+
+      Object.values(els).forEach(el => el.addEventListener("input", update));
+
+      drawGauge();
+      els.kg.value = saved.kg; els.cm.value = saved.cm;
+      els.lb.value = saved.lb; els.ft.value = saved.ft; els.inch.value = saved.inch;
+      setSys(sys);
+    })();
+  </script>
+</body>
+</html>

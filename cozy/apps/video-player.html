@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player · The Cozy Toolbox</title>
+  <meta name="description" content="Play your own videos with cozy custom controls — nothing is uploaded anywhere.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body class="app-page" data-root=".." style="--accent:#6C7BF0; --accent-soft:#E8EAFE;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/clapper.png" alt="">
+      <div>
+        <h1>Video Player</h1>
+        <p>Pick videos from your device — they never leave your computer.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="video-stage" id="stage">
+        <video id="video" style="display:none;" playsinline></video>
+        <div class="stage-msg" id="stage-msg">🎬 Pick some videos below to start the show!</div>
+      </div>
+
+      <div class="v-controls">
+        <input type="range" class="seek" id="seek" min="0" max="1000" value="0" aria-label="Seek">
+        <button class="v-btn ghosty" id="back10" title="Back 10s">⏪</button>
+        <button class="v-btn" id="play" title="Play / pause">▶</button>
+        <button class="v-btn ghosty" id="fwd10" title="Forward 10s">⏩</button>
+        <span class="v-time" id="time">0:00 / 0:00</span>
+        <button class="v-btn ghosty" id="mute" title="Mute">🔊</button>
+        <input type="range" class="vol" id="vol" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+        <select class="select" id="speed" style="width:auto; padding:8px 34px 8px 12px;" aria-label="Playback speed">
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <button class="v-btn ghosty" id="fs" title="Fullscreen">⛶</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📁 Your videos</h2>
+      <label class="btn" for="file-input" style="cursor:pointer;">📂 Choose video files</label>
+      <input id="file-input" type="file" accept="video/*" multiple style="display:none;">
+      <div class="item-list playlist" id="playlist"></div>
+      <div class="empty-state" id="pl-empty">Playlist is empty — choose a video file (or several) above 🍿</div>
+      <p class="hint" style="margin-top:12px;">Shortcuts: <b>space</b> play/pause · <b>← →</b> skip 5s · <b>m</b> mute</p>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      const video = document.getElementById("video");
+      const stageMsg = document.getElementById("stage-msg");
+      const playBtn = document.getElementById("play");
+      const muteBtn = document.getElementById("mute");
+      const seek = document.getElementById("seek");
+      const vol = document.getElementById("vol");
+      const timeEl = document.getElementById("time");
+      const playlistEl = document.getElementById("playlist");
+      const plEmpty = document.getElementById("pl-empty");
+
+      const tracks = [];   // {name, url}
+      let current = -1, seeking = false;
+
+      function fmt(s) {
+        if (!isFinite(s)) return "0:00";
+        s = Math.floor(s);
+        const m = Math.floor(s / 60), sec = String(s % 60).padStart(2, "0");
+        const h = Math.floor(m / 60);
+        return h ? `${h}:${String(m % 60).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+      }
+
+      function load(i) {
+        if (i < 0 || i >= tracks.length) return;
+        current = i;
+        video.src = tracks[i].url;
+        video.style.display = "block";
+        stageMsg.style.display = "none";
+        video.play().catch(() => { });
+        renderPlaylist();
+      }
+
+      function renderPlaylist() {
+        plEmpty.style.display = tracks.length ? "none" : "block";
+        playlistEl.innerHTML = tracks.map((t, i) => `
+          <div class="item${i === current ? "" : ""}" style="${i === current ? "border-color:var(--accent)" : ""}">
+            <img src="../assets/img/clapper.png" alt="" style="width:28px;height:28px;">
+            <div class="grow" style="cursor:pointer;" data-act="play" data-i="${i}">
+              <div class="item-title">${CB.esc(t.name)}${i === current ? ' <span class="hint">· playing</span>' : ""}</div>
+            </div>
+            <button class="icon-btn" data-act="del" data-i="${i}" title="Remove">🗑️</button>
+          </div>`).join("");
+      }
+
+      document.getElementById("file-input").addEventListener("change", e => {
+        for (const f of e.target.files) {
+          tracks.push({ name: f.name, url: URL.createObjectURL(f) });
+        }
+        e.target.value = "";
+        if (current < 0) load(0); else renderPlaylist();
+      });
+
+      playlistEl.addEventListener("click", e => {
+        const btn = e.target.closest("[data-act]");
+        if (!btn) return;
+        const i = +btn.dataset.i;
+        if (btn.dataset.act === "play") load(i);
+        else {
+          if (URL.revokeObjectURL) URL.revokeObjectURL(tracks[i].url);
+          tracks.splice(i, 1);
+          if (i === current) { current = -1; video.pause(); video.removeAttribute("src"); video.style.display = "none"; stageMsg.style.display = "block"; }
+          else if (i < current) current--;
+          renderPlaylist();
+        }
+      });
+
+      playBtn.addEventListener("click", () => {
+        if (!video.src) return CB.toast("Pick a video first 📼");
+        video.paused ? video.play().catch(() => { }) : video.pause();
+      });
+      video.addEventListener("play", () => { playBtn.textContent = "⏸"; });
+      video.addEventListener("pause", () => { playBtn.textContent = "▶"; });
+      video.addEventListener("ended", () => { if (current < tracks.length - 1) load(current + 1); });
+
+      document.getElementById("back10").addEventListener("click", () => video.currentTime = Math.max(0, video.currentTime - 10));
+      document.getElementById("fwd10").addEventListener("click", () => video.currentTime = Math.min(video.duration || 0, video.currentTime + 10));
+
+      seek.addEventListener("input", () => { seeking = true; });
+      seek.addEventListener("change", () => {
+        if (video.duration) video.currentTime = seek.value / 1000 * video.duration;
+        seeking = false;
+      });
+      video.addEventListener("timeupdate", () => {
+        if (!seeking && video.duration) seek.value = video.currentTime / video.duration * 1000;
+        timeEl.textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
+      });
+
+      vol.addEventListener("input", () => { video.volume = +vol.value; video.muted = false; syncMute(); });
+      function syncMute() { muteBtn.textContent = video.muted || video.volume === 0 ? "🔇" : "🔊"; }
+      muteBtn.addEventListener("click", () => { video.muted = !video.muted; syncMute(); });
+
+      document.getElementById("speed").addEventListener("change", e => video.playbackRate = +e.target.value);
+      document.getElementById("fs").addEventListener("click", () => {
+        const stage = document.getElementById("stage");
+        if (document.fullscreenElement) document.exitFullscreen();
+        else stage.requestFullscreen && stage.requestFullscreen();
+      });
+
+      document.addEventListener("keydown", e => {
+        if (e.target.matches("input, select, textarea")) return;
+        if (!video.src) return;
+        if (e.code === "Space") { e.preventDefault(); video.paused ? video.play() : video.pause(); }
+        if (e.key === "ArrowLeft") video.currentTime = Math.max(0, video.currentTime - 5);
+        if (e.key === "ArrowRight") video.currentTime = Math.min(video.duration || 0, video.currentTime + 5);
+        if (e.key.toLowerCase() === "m") { video.muted = !video.muted; syncMute(); }
+      });
+
+      renderPlaylist(); syncMute();
+    })();
+  </script>
+</body>
+</html>

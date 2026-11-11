@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coin Flipper · The Cozy Toolbox</title>
+  <meta name="description" content="Flip a shiny 3D coin — heads or tails settles it.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .tally-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+    .coin-wrap { text-align: center; }
+    .verdict { font-family: var(--font-head); font-size: 1.6rem; font-weight: 700; min-height: 2em; margin-bottom: 6px; }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#FFB238; --accent-soft:#FFF0D4;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/coin.png" alt="">
+      <div>
+        <h1>Coin Flipper</h1>
+        <p>Heads or tails? Let a shiny coin settle the score.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="coin-wrap">
+        <div class="verdict" id="verdict">Ready when you are 🪙</div>
+        <div class="coin-scene">
+          <div class="coin" id="coin">
+            <div class="coin-face front">
+              <img src="../assets/img/coin.png" alt="Coin front">
+              <span class="face-label" id="lbl-front">HEADS</span>
+            </div>
+            <div class="coin-face back">
+              <img src="../assets/img/coin.png" alt="Coin back">
+              <span class="face-label" id="lbl-back">TAILS</span>
+            </div>
+          </div>
+        </div>
+        <button class="btn" id="flip-btn" style="font-size:1.15rem; padding:13px 34px;">🪙 Flip the coin</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>🏷️ Name your sides</h2>
+      <p class="hint" style="margin-bottom:12px;">Attach an option to each side — e.g. “Team A bats first” / “Team B bats first”.</p>
+      <div class="form-row">
+        <div class="field">
+          <label for="heads-name">Heads means…</label>
+          <input id="heads-name" class="input" type="text" placeholder="HEADS" maxlength="24">
+        </div>
+        <div class="field">
+          <label for="tails-name">Tails means…</label>
+          <input id="tails-name" class="input" type="text" placeholder="TAILS" maxlength="24">
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📊 The tally <button class="btn btn-ghost btn-sm" id="reset-btn" style="margin-left:auto;">Reset</button></h2>
+      <div class="tally-row">
+        <div class="summary-cell" style="--accent-soft:#FFF0D4"><div class="num" id="tally-h">0</div><div class="lbl" id="tally-h-lbl">HEADS</div></div>
+        <div class="summary-cell" style="--accent-soft:#FFF0D4"><div class="num" id="tally-t">0</div><div class="lbl" id="tally-t-lbl">TAILS</div></div>
+        <div class="summary-cell" style="--accent-soft:#FFF0D4"><div class="num" id="tally-n">0</div><div class="lbl">Total flips</div></div>
+      </div>
+      <div class="item-list" id="history"></div>
+      <div class="empty-state" id="hist-empty">No flips yet — give it a spin! 🌪️</div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      let tally = CB.store.get("coin:tally", { heads: 0, tails: 0 });
+      let history = CB.store.get("coin:history", []);
+      let labels = CB.store.get("coin:labels", { heads: "HEADS", tails: "TAILS" });
+
+      const coin = document.getElementById("coin");
+      const flipBtn = document.getElementById("flip-btn");
+      const verdict = document.getElementById("verdict");
+      let spins = 0, flipping = false;
+
+      function labelOf(side) { return (labels[side] || side.toUpperCase()); }
+
+      function paint() {
+        document.getElementById("lbl-front").textContent = labelOf("heads");
+        document.getElementById("lbl-back").textContent = labelOf("tails");
+        document.getElementById("heads-name").value = labels.heads === "HEADS" ? "" : labels.heads;
+        document.getElementById("tails-name").value = labels.tails === "TAILS" ? "" : labels.tails;
+        const total = tally.heads + tally.tails;
+        document.getElementById("tally-h").textContent = tally.heads;
+        document.getElementById("tally-t").textContent = tally.tails;
+        document.getElementById("tally-n").textContent = total;
+        document.getElementById("tally-h-lbl").textContent = labelOf("heads");
+        document.getElementById("tally-t-lbl").textContent = labelOf("tails");
+        document.getElementById("hist-empty").style.display = history.length ? "none" : "block";
+        document.getElementById("history").innerHTML = history.slice(0, 12).map((h, i) => `
+          <div class="item">
+            <img src="../assets/img/coin.png" alt="" style="width:26px;height:26px;">
+            <div class="grow"><div class="item-title">${CB.esc(labelOf(h.side))}</div>
+            <div class="item-sub">flip #${h.n}</div></div>
+          </div>`).join("");
+      }
+
+      flipBtn.addEventListener("click", () => {
+        if (flipping) return;
+        flipping = true; flipBtn.disabled = true;
+        verdict.textContent = "Spinning… 🌀";
+        const result = Math.random() < 0.5 ? "heads" : "tails";
+        spins += 4;                                   // each flip = 4 full spins
+        const target = spins * 360 + (result === "tails" ? 180 : 0);
+        coin.style.transform = `rotateX(${target}deg)`;
+        setTimeout(() => {
+          flipping = false; flipBtn.disabled = false;
+          tally[result]++;
+          history.unshift({ side: result, n: tally.heads + tally.tails });
+          history = history.slice(0, 40);
+          CB.store.set("coin:tally", tally);
+          CB.store.set("coin:history", history);
+          verdict.textContent = result === "heads" ? `🪙 ${labelOf("heads")}!` : `🪙 ${labelOf("tails")}!`;
+          CB.confetti(window.innerWidth / 2, window.innerHeight * 0.3, 45);
+          paint();
+        }, 1550);
+      });
+
+      document.getElementById("heads-name").addEventListener("input", e => {
+        labels.heads = e.target.value.trim() || "HEADS";
+        CB.store.set("coin:labels", labels); paint();
+      });
+      document.getElementById("tails-name").addEventListener("input", e => {
+        labels.tails = e.target.value.trim() || "TAILS";
+        CB.store.set("coin:labels", labels); paint();
+      });
+
+      document.getElementById("reset-btn").addEventListener("click", () => {
+        tally = { heads: 0, tails: 0 }; history = [];
+        CB.store.set("coin:tally", tally); CB.store.set("coin:history", history);
+        spins = 0; coin.style.transform = "rotateX(0deg)";
+        verdict.textContent = "Fresh start ✨";
+        paint();
+      });
+
+      paint();
+    })();
+  </script>
+</body>
+</html>

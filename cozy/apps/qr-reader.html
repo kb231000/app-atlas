@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Code Reader · The Cozy Toolbox</title>
+  <meta name="description" content="Scan QR codes with your camera or decode them from an image file.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    #qr-reader { border: 2px dashed var(--line); border-radius: 16px; margin-bottom: 6px; background: #FFFAF3; }
+    #qr-reader video { border-radius: 16px; }
+    .qr-img-zone {
+      border: 2px dashed var(--line); border-radius: 16px; padding: 28px 16px;
+      text-align: center; font-weight: 800; color: var(--ink-soft); cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .qr-img-zone:hover { border-color: var(--accent); background: var(--accent-soft); }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#1B9AAA; --accent-soft:#DDF2F4;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/camera.png" alt="">
+      <div>
+        <h1>QR Code Reader</h1>
+        <p>Point your camera at a code — or drop an image in.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="tabs" id="mode-tabs">
+        <button class="tab active" data-mode="camera">📷 Camera</button>
+        <button class="tab" data-mode="image">🖼️ Image file</button>
+      </div>
+
+      <div id="camera-pane">
+        <div id="qr-reader" style="min-height:220px;"></div>
+        <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+          <button class="btn" id="start-cam">▶ Start scanning</button>
+          <button class="btn btn-ghost" id="stop-cam" style="display:none;">⏹ Stop</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">Camera access needs the site to be served over <b>https</b> or <b>localhost</b>.
+          On a plain file:// page, use the image tab instead.</p>
+      </div>
+
+      <div id="image-pane" style="display:none;">
+        <label class="qr-img-zone" for="qr-file">
+          🖼️ Tap to choose an image containing a QR code<br>
+          <span class="hint">(png / jpg / webp)</span>
+        </label>
+        <input id="qr-file" type="file" accept="image/*" style="display:none;">
+        <div id="qr-file-reader" style="display:none;"></div>
+      </div>
+
+      <div class="qr-result" id="qr-result" style="display:none;">
+        <div class="hint">Decoded content</div>
+        <div class="item-title" id="qr-text" style="margin-top:4px;"></div>
+        <div class="qr-actions">
+          <button class="btn btn-sm" id="copy-btn">📋 Copy</button>
+          <a class="btn btn-sm btn-ghost" id="open-btn" target="_blank" rel="noopener" style="display:none; text-decoration:none;">🔗 Open link</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      if (typeof Html5Qrcode === "undefined") {
+        CB.toast("QR library failed to load — check your connection and refresh.");
+      }
+
+      let scanner = null, scanning = false;
+      const $result = document.getElementById("qr-result");
+      const $text = document.getElementById("qr-text");
+      const $open = document.getElementById("open-btn");
+
+      function showResult(txt) {
+        $result.style.display = "block";
+        $text.textContent = txt;
+        const isUrl = /^https?:\/\//i.test(txt.trim());
+        $open.style.display = isUrl ? "inline-flex" : "none";
+        if (isUrl) $open.href = txt.trim();
+        CB.confetti(window.innerWidth / 2, window.innerHeight * 0.35, 35);
+        CB.toast("✅ QR decoded!");
+        $result.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      function onScanSuccess(decodedText) {
+        if (scanning) stopCam();
+        showResult(decodedText);
+      }
+
+      /* ---------- camera ---------- */
+      async function startCam() {
+        if (typeof Html5Qrcode === "undefined") return;
+        try {
+          scanner = new Html5Qrcode("qr-reader");
+          scanning = true;
+          await scanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 230, height: 230 } },
+            onScanSuccess,
+            () => { } // per-frame miss — ignore
+          );
+          document.getElementById("start-cam").style.display = "none";
+          document.getElementById("stop-cam").style.display = "inline-flex";
+        } catch (err) {
+          scanning = false;
+          CB.toast("Couldn't open the camera 📷 — " + (err && err.message ? err.message : "permission denied?"));
+        }
+      }
+      function stopCam() {
+        if (scanner && scanning) {
+          scanner.stop().then(() => scanner.clear()).catch(() => { });
+        }
+        scanning = false;
+        document.getElementById("start-cam").style.display = "inline-flex";
+        document.getElementById("stop-cam").style.display = "none";
+      }
+      document.getElementById("start-cam").addEventListener("click", startCam);
+      document.getElementById("stop-cam").addEventListener("click", stopCam);
+      window.addEventListener("beforeunload", stopCam);
+
+      /* ---------- image file ---------- */
+      document.getElementById("qr-file").addEventListener("change", async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (typeof Html5Qrcode === "undefined") return;
+        try {
+          const s = new Html5Qrcode("qr-file-reader");
+          const txt = await s.scanFile(file, false);
+          showResult(txt);
+        } catch (err) {
+          CB.toast("No QR code found in that image 🔍");
+        }
+        e.target.value = "";
+      });
+
+      /* ---------- actions ---------- */
+      document.getElementById("copy-btn").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText($text.textContent); CB.toast("Copied to clipboard 📋"); }
+        catch (e) { CB.toast("Copy blocked by the browser"); }
+      });
+
+      document.getElementById("mode-tabs").addEventListener("click", e => {
+        const t = e.target.closest(".tab");
+        if (!t) return;
+        const mode = t.dataset.mode;
+        CB.$$(".tab", document.getElementById("mode-tabs")).forEach(x => x.classList.toggle("active", x === t));
+        document.getElementById("camera-pane").style.display = mode === "camera" ? "block" : "none";
+        document.getElementById("image-pane").style.display = mode === "image" ? "block" : "none";
+        if (mode !== "camera") stopCam();
+      });
+    })();
+  </script>
+</body>
+</html>

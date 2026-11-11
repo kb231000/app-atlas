@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Manager · The Cozy Toolbox</title>
+  <meta name="description" content="Track income and spending by month and see your savings.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .month-nav h3 { font-size: 1.25rem; }
+    .entry-amt { font-family: var(--font-head); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amt-pos { color: #4a8f1f; } .amt-neg { color: #e04b38; }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#FF8A3D; --accent-soft:#FFE8D6;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/moneybag.png" alt="">
+      <div>
+        <h1>Budget Manager</h1>
+        <p>Track income & spending, see your month's savings.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="month-nav">
+        <button class="btn btn-ghost btn-sm" id="prev-month">‹ Prev</button>
+        <h3 id="month-label">—</h3>
+        <button class="btn btn-ghost btn-sm" id="next-month">Next ›</button>
+      </div>
+      <div class="summary-row">
+        <div class="summary-cell"><div class="num amt-pos" id="sum-income">0</div><div class="lbl">Income</div></div>
+        <div class="summary-cell"><div class="num amt-neg" id="sum-spent">0</div><div class="lbl">Spent</div></div>
+        <div class="summary-cell"><div class="num" id="sum-left">0</div><div class="lbl">Left to save</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>➕ Add an entry</h2>
+      <div class="form-row">
+        <div class="field">
+          <label for="e-type">Type</label>
+          <select id="e-type" class="select">
+            <option value="expense">💸 Expense</option>
+            <option value="income">💰 Income</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="e-cat">Category</label>
+          <select id="e-cat" class="select"></select>
+        </div>
+        <div class="field">
+          <label for="e-label">Note</label>
+          <input id="e-label" class="input" type="text" placeholder="e.g. groceries" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="e-amt">Amount</label>
+          <input id="e-amt" class="input" type="number" step="any" min="0" placeholder="24.50" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" id="add-entry">Add</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📊 Where it went <span class="hint">· expenses this month</span></h2>
+      <div class="cat-breakdown" id="breakdown"></div>
+      <div class="empty-state" id="bd-empty">No expenses this month yet 🌱</div>
+    </section>
+
+    <section class="panel">
+      <h2>🧾 Entries <span class="hint" id="entry-count"></span></h2>
+      <div class="item-list" id="entry-list"></div>
+      <div class="empty-state" id="entry-empty">Nothing logged for this month — add your first entry above 🧾</div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      const EXPENSE_CATS = { "Food 🍜": "#FFB238", "Rent & Bills 🏠": "#6C7BF0", "Transport 🚌": "#1B9AAA", "Fun 🎮": "#A66CFF", "Health 💊": "#FF6B57", "Shopping 🛍️": "#E86FA4", "Other 📦": "#8A736B" };
+      const INCOME_CATS = { "Salary 💼": "#7BC950", "Side hustle ✨": "#2EC4B6", "Gift 🎁": "#FF8A3D", "Other 💛": "#8A736B" };
+
+      let entries = CB.store.get("budget:entries", []);
+
+      /* Another tab edited the ledger — adopt its version instead of overwriting it on next save. */
+      window.addEventListener("storage", e => {
+        if (e.key !== "cozy:budget:entries" || e.newValue === null) return;
+        entries = CB.store.get("budget:entries", []);
+        render();
+      });
+
+      const now = new Date();
+      let viewYear = now.getFullYear(), viewMonth = now.getMonth(); // 0-based
+
+      const $type = document.getElementById("e-type");
+      const $cat = document.getElementById("e-cat");
+      const $label = document.getElementById("e-label");
+      const $amt = document.getElementById("e-amt");
+
+      function pad(n) { return String(n).padStart(2, "0"); }
+      const monthKey = (y, m) => `${y}-${pad(m + 1)}`;
+
+      function fillCats() {
+        const cats = $type.value === "income" ? INCOME_CATS : EXPENSE_CATS;
+        $cat.innerHTML = Object.keys(cats).map(c => `<option value="${c}">${c}</option>`).join("");
+      }
+      $type.addEventListener("change", fillCats);
+
+      function monthEntries() {
+        const key = monthKey(viewYear, viewMonth);
+        return entries.filter(e => e.date.startsWith(key))
+          .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+      }
+
+      function render() {
+        document.getElementById("month-label").textContent =
+          new Date(viewYear, viewMonth, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+        const list = monthEntries();
+        /* Round to cents — raw float accumulation leaves residues like -1e-15 that render as "-0.00". */
+        const r2 = n => Math.round(n * 100) / 100;
+        const income = r2(list.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0));
+        const spent = r2(list.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0));
+        const left = r2(income - spent);
+
+        document.getElementById("sum-income").textContent = CB.fmtNum(income);
+        document.getElementById("sum-spent").textContent = CB.fmtNum(spent);
+        const leftEl = document.getElementById("sum-left");
+        leftEl.textContent = (left < 0 ? "-" : "") + CB.fmtNum(Math.abs(left));
+        leftEl.style.color = left < 0 ? "#e04b38" : left > 0 ? "#4a8f1f" : "var(--ink)";
+
+        /* category breakdown */
+        const byCat = {};
+        list.filter(e => e.type === "expense").forEach(e => { byCat[e.cat] = (byCat[e.cat] || 0) + e.amount; });
+        const max = Math.max(...Object.values(byCat), 0);
+        const bd = document.getElementById("breakdown");
+        document.getElementById("bd-empty").style.display = Object.keys(byCat).length ? "none" : "block";
+        bd.innerHTML = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => `
+          <div class="cat-row">
+            <span>${CB.esc(cat)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${max ? amt / max * 100 : 0}%;background:${EXPENSE_CATS[cat] || "#8A736B"}"></div></div>
+            <span class="amt">${CB.fmtNum(amt)}</span>
+          </div>`).join("");
+
+        /* entries */
+        document.getElementById("entry-count").textContent = list.length ? `· ${list.length} this month` : "";
+        document.getElementById("entry-empty").style.display = list.length ? "none" : "block";
+        document.getElementById("entry-list").innerHTML = list.map(e => `
+          <div class="item" data-id="${e.id}">
+            <span style="font-size:1.3rem;">${e.type === "income" ? "💰" : "💸"}</span>
+            <div class="grow">
+              <div class="item-title">${CB.esc(e.label || "Untitled")}</div>
+              <div class="item-sub">${CB.esc(e.cat)} · ${e.date.slice(8)} ${new Date(viewYear, viewMonth).toLocaleDateString(undefined, { month: "short" })}</div>
+            </div>
+            <span class="entry-amt ${e.type === "income" ? "amt-pos" : "amt-neg"}">${e.type === "income" ? "+" : "−"}${CB.fmtNum(e.amount)}</span>
+            <button class="icon-btn" data-act="del" title="Delete" aria-label="Delete entry">🗑️</button>
+          </div>`).join("");
+      }
+
+      document.getElementById("add-entry").addEventListener("click", () => {
+        const amount = parseFloat($amt.value);
+        if (!amount || amount <= 0) return CB.toast("Enter an amount first 💰");
+        const today = new Date();
+        const date = monthKey(today.getFullYear(), today.getMonth()) === monthKey(viewYear, viewMonth)
+          ? monthKey(viewYear, viewMonth) + "-" + pad(today.getDate())
+          : monthKey(viewYear, viewMonth) + "-01";
+        entries.push({ id: CB.uid(), type: $type.value, cat: $cat.value, label: $label.value.trim(), amount, date });
+        CB.store.set("budget:entries", entries);
+        $label.value = ""; $amt.value = "";
+        render();
+        if ($type.value === "income") CB.toast("💰 Cha-ching! Income added");
+        else { CB.toast("💸 Expense logged"); if (Math.random() < 0.12) CB.confetti(window.innerWidth / 2, 200, 24); }
+      });
+
+      document.getElementById("entry-list").addEventListener("click", e => {
+        const btn = e.target.closest('[data-act="del"]');
+        if (!btn) return;
+        const id = btn.closest(".item").dataset.id;
+        entries = entries.filter(x => x.id !== id);
+        CB.store.set("budget:entries", entries);
+        render(); CB.toast("Entry removed 🗑️");
+      });
+
+      document.getElementById("prev-month").addEventListener("click", () => {
+        viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } render();
+      });
+      document.getElementById("next-month").addEventListener("click", () => {
+        viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } render();
+      });
+
+      fillCats(); render();
+    })();
+  </script>
+</body>
+</html>

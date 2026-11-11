@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>To-Do List · The Cozy Toolbox</title>
+  <meta name="description" content="Jot tasks, tick them off, feel wonderful.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .due-soon { color: #e04b38 !important; }
+    .edit-input { flex: 1; min-width: 0; }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#9B7EDE; --accent-soft:#F0EAFB;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/notepad.png" alt="">
+      <div>
+        <h1>To-Do List</h1>
+        <p>Jot tasks, tick them off, feel wonderful.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>➕ New task</h2>
+      <div class="form-row">
+        <div class="field" style="flex:1;">
+          <label for="task-text">What needs doing?</label>
+          <input id="task-text" class="input" type="text" placeholder="e.g. Water the plants 🌿" maxlength="140">
+        </div>
+        <div class="field">
+          <label for="task-due">Due (optional)</label>
+          <input id="task-due" class="input" type="date">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" id="add-btn">Add task</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📝 My tasks <span class="hint" id="task-count"></span>
+        <button class="btn btn-ghost btn-sm" id="clear-done" style="margin-left:auto;">🧹 Clear done</button>
+      </h2>
+      <div class="tabs" id="filters">
+        <button class="tab active" data-f="all">All</button>
+        <button class="tab" data-f="active">Active</button>
+        <button class="tab" data-f="done">Done</button>
+      </div>
+      <div class="item-list" id="task-list"></div>
+      <div class="empty-state" id="task-empty">Nothing here — add a task and feel mighty 🦸</div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      let items = CB.store.get("todo:items", []);
+      let filter = "all";
+
+      const $text = document.getElementById("task-text");
+      const $due = document.getElementById("task-due");
+      const $list = document.getElementById("task-list");
+      const $empty = document.getElementById("task-empty");
+      const $count = document.getElementById("task-count");
+
+      const save = () => CB.store.set("todo:items", items);
+      /* Local date, not UTC — keeps "overdue" and "today" in the same timezone as dueLabel(). */
+      const todayStr = () => {
+        const d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      };
+
+      /* Another tab edited the list — adopt its version instead of overwriting it on next save. */
+      window.addEventListener("storage", e => {
+        if (e.key !== "cozy:todo:items" || e.newValue === null) return;
+        items = CB.store.get("todo:items", []);
+        render();
+      });
+
+      function dueLabel(due) {
+        if (!due) return "";
+        const t = new Date() ; t.setHours(0, 0, 0, 0);
+        const d = new Date(due + "T00:00:00");
+        const diff = Math.round((d - t) / 86400000);
+        const nice = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+        if (diff === 0) return "📅 today";
+        if (diff === 1) return "📅 tomorrow";
+        if (diff < 0) return `⏰ overdue — was ${nice}`;
+        return `📅 ${nice}`;
+      }
+      function isOverdue(it) { return !it.done && it.due && it.due < todayStr(); }
+
+      function add() {
+        const text = $text.value.trim();
+        if (!text) return CB.toast("Write a task first ✍️");
+        items.unshift({ id: CB.uid(), text, due: $due.value || "", done: false, created: Date.now() });
+        save();
+        $text.value = "";
+        render();
+        if (items.length === 1) CB.confetti(window.innerWidth / 2, 160, 30);
+      }
+
+      function startEdit(itemEl, item) {
+        const titleEl = itemEl.querySelector(".item-title");
+        const input = document.createElement("input");
+        input.className = "input edit-input";
+        input.value = item.text;
+        input.setAttribute("aria-label", "Edit task");
+        titleEl.replaceWith(input);
+        input.focus(); input.select();
+        const commit = () => {
+          const v = input.value.trim();
+          if (v) item.text = v;
+          save(); render();
+        };
+        input.addEventListener("keydown", e => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") render();
+        });
+        input.addEventListener("blur", commit);
+      }
+
+      function render() {
+        const shown = items.filter(i =>
+          filter === "all" ? true : filter === "done" ? i.done : !i.done);
+        const doneN = items.filter(i => i.done).length;
+        $count.textContent = items.length ? `· ${doneN}/${items.length} done` : "";
+        $empty.style.display = shown.length ? "none" : "block";
+
+        $list.innerHTML = shown.map(i => `
+          <div class="item${i.done ? " done" : ""}" data-id="${i.id}">
+            <input type="checkbox" class="check" data-act="toggle" ${i.done ? "checked" : ""} aria-label="Toggle task">
+            <div class="grow">
+              <div class="item-title">${CB.esc(i.text)}</div>
+              ${i.due ? `<div class="item-sub${isOverdue(i) ? " due-soon" : ""}">${dueLabel(i.due)}</div>` : ""}
+            </div>
+            <button class="icon-btn" data-act="edit" title="Edit">✏️</button>
+            <button class="icon-btn" data-act="del" title="Delete" aria-label="Delete task">🗑️</button>
+          </div>`).join("");
+      }
+
+      $list.addEventListener("click", e => {
+        const btn = e.target.closest("[data-act]");
+        if (!btn) return;
+        const row = btn.closest(".item");
+        const item = items.find(i => i.id === row.dataset.id);
+        if (!item) return;
+        const act = btn.dataset.act;
+        if (act === "toggle") {
+          item.done = !item.done;
+          if (item.done && items.every(i => i.done) && items.length > 1) {
+            CB.confetti(window.innerWidth / 2, window.innerHeight * 0.3, 70);
+            CB.toast("🎉 Everything done — legend!");
+          } else if (item.done) {
+            CB.toast("✅ Nice one!");
+          }
+        } else if (act === "del") {
+          items.splice(items.indexOf(item), 1);
+          CB.toast("Deleted 🗑️");
+        } else if (act === "edit") {
+          startEdit(row, item);
+          return;
+        }
+        save(); render();
+      });
+
+      document.getElementById("add-btn").addEventListener("click", add);
+      $text.addEventListener("keydown", e => { if (e.key === "Enter") add(); });
+      document.getElementById("clear-done").addEventListener("click", () => {
+        const n = items.filter(i => i.done).length;
+        if (!n) return CB.toast("No finished tasks to sweep 🧹");
+        items = items.filter(i => !i.done);
+        save(); render(); CB.toast(`Swept ${n} finished task${n > 1 ? "s" : ""} ✨`);
+      });
+      document.getElementById("filters").addEventListener("click", e => {
+        const t = e.target.closest(".tab"); if (!t) return;
+        filter = t.dataset.f;
+        CB.$$(".tab", document.getElementById("filters")).forEach(x => x.classList.toggle("active", x === t));
+        render();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

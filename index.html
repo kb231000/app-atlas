@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App Atlas — 12 web apps, runnable right here</title>
+<meta name="description" content="A portfolio of 12 fully-functional web apps: mini tools, a video composer and a personal finance companion. Everything runs in your browser, everything stays on your device.">
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121820; --panel2:#0f141b; --line:#212b38; --line2:#2b3847;
+    --ink:#e8edf4; --soft:#93a1b5; --dim:#5f6c7d;
+    --accent:#5eead4; --accent2:#818cf8;
+    --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  button{font:inherit;cursor:pointer}
+
+  /* ---------- nav ---------- */
+  nav{
+    position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:18px;
+    padding:12px 22px;background:rgba(11,15,20,.82);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  nav .logo{font-weight:800;font-size:1.05rem;letter-spacing:.2px;color:var(--ink)}
+  nav .logo b{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  nav .links a{
+    color:var(--soft);font-size:.86rem;padding:6px 12px;border-radius:999px;
+  }
+  nav .links a:hover{color:var(--ink);background:var(--panel);text-decoration:none}
+  nav .count{
+    font-size:.72rem;color:var(--dim);border:1px solid var(--line);
+    padding:2px 9px;border-radius:999px;white-space:nowrap;
+  }
+
+  /* ---------- hero ---------- */
+  header.hero{padding:72px 22px 46px;max-width:1080px;margin:0 auto;text-align:center}
+  .hero h1{
+    font-size:clamp(2.1rem,6vw,3.6rem);font-weight:800;letter-spacing:-1px;line-height:1.08;
+    background:linear-gradient(92deg,#7dd3fc 0%,var(--accent) 45%,var(--accent2) 90%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p{max-width:640px;margin:16px auto 0;color:var(--soft);font-size:1.02rem}
+  .hero .stats{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .hero .stat{
+    border:1px solid var(--line);background:var(--panel);border-radius:999px;
+    padding:8px 16px;font-size:.86rem;color:var(--soft);
+  }
+  .hero .stat b{color:var(--ink)}
+
+  section{max-width:1180px;margin:0 auto;padding:46px 22px 10px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .sec-head h2{font-size:1.5rem;font-weight:800;letter-spacing:-.3px}
+  .sec-head .sub{color:var(--dim);font-size:.88rem}
+  .sec-desc{color:var(--soft);font-size:.92rem;max-width:760px;margin-bottom:22px}
+
+  /* ---------- web cards ---------- */
+  .web-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:14px}
+  .web-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:flex;flex-direction:column;gap:10px;transition:transform .15s,border-color .15s;
+  }
+  .web-card:hover{transform:translateY(-2px);border-color:#33415a}
+  .web-card .top{display:flex;align-items:center;gap:11px}
+  .web-card img,.web-card .glyph{
+    width:42px;height:42px;border-radius:10px;background:var(--panel2);
+    border:1px solid var(--line);object-fit:contain;padding:5px;flex:none;
+  }
+  .web-card .glyph{display:flex;align-items:center;justify-content:center;font-size:1.35rem}
+  .web-card h3{font-size:.98rem;font-weight:700}
+  .web-card .tag{font-size:.7rem;color:var(--dim)}
+  .web-card p{font-size:.83rem;color:var(--soft);flex:1}
+  .web-card .actions{display:flex;gap:8px}
+  .btn{
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    padding:7px 13px;border-radius:9px;font-size:.83rem;font-weight:600;
+    transition:background .15s,border-color .15s;
+  }
+  .btn:hover{background:#1a2330;border-color:#3a4a63;text-decoration:none}
+  .btn.primary{background:linear-gradient(92deg,#0e7490,#4f46e5);border-color:transparent;color:#fff}
+  .btn.primary:hover{filter:brightness(1.15);background:linear-gradient(92deg,#0e7490,#4f46e5)}
+
+  /* ---------- viewer modal ---------- */
+  .viewer{
+    position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
+    background:rgba(5,8,12,.78);backdrop-filter:blur(6px);padding:24px;
+  }
+  .viewer.show{display:flex}
+  .viewer .frame{
+    width:min(1080px,100%);height:min(86vh,860px);background:var(--panel);
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+  }
+  .viewer .bar{
+    display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);
+    background:var(--panel2);
+  }
+  .viewer .bar .title{font-weight:700;font-size:.92rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .viewer iframe{flex:1;width:100%;border:0;background:#fff}
+  .viewer .loading{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--soft);font-size:.9rem;pointer-events:none;
+  }
+
+  footer.site{
+    margin-top:60px;padding:34px 22px 44px;border-top:1px solid var(--line);
+    text-align:center;color:var(--dim);font-size:.84rem;
+  }
+  footer.site .row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+
+  @media (max-width:640px){
+    .viewer{padding:0}
+    .viewer .frame{width:100%;height:100%;border-radius:0;border:0}
+    header.hero{padding-top:52px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">App <b>Atlas</b></span>
+  <span class="count" id="nav-count"></span>
+  <div class="links">
+    <a href="#web">Web apps</a>
+    <a href="#about">About</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <h1>Twelve apps. Zero installs.</h1>
+  <p>
+    A portfolio of <b>fully-functional web apps</b> you can run right on this page —
+    everyday mini tools, an image-video composer and a personal finance companion.
+    No accounts, no tracking, no server: everything runs in your browser and
+    everything stays on your device.
+  </p>
+  <div class="stats">
+    <span class="stat"><b>12</b> apps · runnable below</span>
+    <span class="stat"><b>0</b> accounts · <b>0</b> tracking</span>
+    <span class="stat"><b>100%</b> on-device storage</span>
+  </div>
+</header>
+
+<section id="web">
+  <div class="sec-head"><h2>Web apps</h2><span class="sub">click ▶ Launch — they run right on this page</span></div>
+  <p class="sec-desc">
+    Vanilla-JS mini tools from <em>The Cozy Toolbox</em>, plus two TypeScript apps:
+    <b>Still Studio</b>, an image-video composer, and <b>Her Nest</b>, a personal finance companion.
+  </p>
+  <div class="web-grid" id="web-grid"></div>
+</section>
+
+<section id="about">
+  <div class="sec-head"><h2>About</h2></div>
+  <p class="sec-desc">
+    Every app here was reviewed line-by-line and hardened: storage failures surface
+    instead of silently vanishing, user data is quarantined before it can be
+    overwritten, tabs stay in sync, and all user content is escaped on render.
+    State lives entirely on your device — localStorage for these apps means your
+    notes, budgets and plans never leave the browser. Built with vanilla JS for the
+    mini tools and TypeScript (Vite) for Still Studio and Her Nest.
+  </p>
+</section>
+
+<footer class="site">
+  <div class="row">
+    <span>🧰 The Cozy Toolbox</span>
+    <span>🎬 Still Studio</span>
+    <span>💛 Her Nest</span>
+  </div>
+  <div>Built to run — no build step for the mini tools, one command for the TypeScript apps.</div>
+</footer>
+
+<div class="viewer" id="viewer" role="dialog" aria-modal="true">
+  <div class="frame">
+    <div class="bar">
+      <span class="title" id="viewer-title"></span>
+      <a class="btn" id="viewer-tab" target="_blank" rel="noopener">↗ new tab</a>
+      <button class="btn" id="viewer-close">✕ close</button>
+    </div>
+    <div style="position:relative;flex:1;display:flex">
+      <iframe id="viewer-iframe" title="App preview" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"></iframe>
+      <div class="loading" id="viewer-loading">Loading app…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const WEB = [
+    { name:"BMI Calculator", blurb:"Metric & imperial body-mass index with a friendly scale and healthy-range guidance.", icon:"cozy/assets/img/scale.png", href:"cozy/apps/bmi-calculator.html", tag:"Cozy Toolbox" },
+    { name:"Budget Manager", blurb:"Monthly income & expense ledger with category breakdown, per-month view and clean totals.", icon:"cozy/assets/img/moneybag.png", href:"cozy/apps/budget-manager.html", tag:"Cozy Toolbox" },
+    { name:"Coin Flipper", blurb:"Animated flips, running tally and history — settle any 50/50 debate in style.", icon:"cozy/assets/img/coin.png", href:"cozy/apps/coin-flipper.html", tag:"Cozy Toolbox" },
+    { name:"Notes", blurb:"Fast sticky notes with search-as-you-type, highlight matches and instant autosave.", icon:"cozy/assets/img/memo.png", href:"cozy/apps/notes.html", tag:"Cozy Toolbox" },
+    { name:"Pills Reminder", blurb:"Medication schedule with interval tracking, next-dose countdown and missed-dose awareness.", icon:"cozy/assets/img/pill.png", href:"cozy/apps/pills-reminder.html", tag:"Cozy Toolbox" },
+    { name:"QR Reader", blurb:"Scan QR codes with the camera; safe link preview before anything opens.", icon:"cozy/assets/img/camera.png", href:"cozy/apps/qr-reader.html", tag:"Cozy Toolbox" },
+    { name:"Quiz", blurb:"Five categories, adjustable lengths, per-category best scores and confetti for the worthy.", icon:"cozy/assets/img/brain.png", href:"cozy/apps/quiz.html", tag:"Cozy Toolbox" },
+    { name:"To-Do", blurb:"Tasks with due dates, today/tomorrow/overdue labels and filters that stay out of the way.", icon:"cozy/assets/img/star.png", href:"cozy/apps/todo.html", tag:"Cozy Toolbox" },
+    { name:"Unit Converter", blurb:"Length, mass, temperature and more — with swap, precision control and sensible formatting.", icon:"cozy/assets/img/ruler.png", href:"cozy/apps/unit-converter.html", tag:"Cozy Toolbox" },
+    { name:"Video Player", blurb:"Pick a local video, control playback, keep it simple — nothing uploads anywhere.", icon:"cozy/assets/img/clapper.png", href:"cozy/apps/video-player.html", tag:"Cozy Toolbox" },
+    { name:"Still Studio", blurb:"Compose still scenes into videos — layers, motion, WebM export. Built with TypeScript.", icon:"apps/still-studio/favicon.svg", href:"apps/still-studio/", tag:"TypeScript · Vite" },
+    { name:"Her Nest", blurb:"A warm personal-finance nest: emergency fund, debt payoff simulator, weekly breaks & lessons.", icon:"💛", href:"apps/her-nest/", tag:"React · TypeScript" }
+  ];
+
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  /* ---------- web cards ---------- */
+  const webGrid = document.getElementById("web-grid");
+  webGrid.innerHTML = WEB.map((a, i) => `
+    <div class="web-card">
+      <div class="top">
+        ${a.icon.endsWith(".svg") || a.icon.endsWith(".png")
+          ? `<img src="${esc(a.icon)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;glyph&quot;>🧩</div>'">`
+          : `<div class="glyph">${esc(a.icon)}</div>`}
+        <div>
+          <h3>${esc(a.name)}</h3>
+          <div class="tag">${esc(a.tag)}</div>
+        </div>
+      </div>
+      <p>${esc(a.blurb)}</p>
+      <div class="actions">
+        <button class="btn primary" data-launch="${i}">▶ Launch</button>
+        <a class="btn" href="${esc(a.href)}" target="_blank" rel="noopener">↗</a>
+      </div>
+    </div>`).join("");
+
+  /* ---------- viewer modal ---------- */
+  const viewer = document.getElementById("viewer");
+  const vFrame = document.getElementById("viewer-iframe");
+  const vTitle = document.getElementById("viewer-title");
+  const vTab = document.getElementById("viewer-tab");
+  const vLoad = document.getElementById("viewer-loading");
+
+  function openViewer(a) {
+    vTitle.textContent = a.name;
+    vTab.href = a.href;
+    vLoad.style.display = "flex";
+    vFrame.src = a.href;
+    viewer.classList.add("show");
+    document.body.style.overflow = "hidden";
+  }
+  function closeViewer() {
+    viewer.classList.remove("show");
+    vFrame.src = "about:blank";
+    document.body.style.overflow = "";
+  }
+  vFrame.addEventListener("load", () => { vLoad.style.display = "none"; });
+  document.getElementById("viewer-close").addEventListener("click", closeViewer);
+  viewer.addEventListener("click", e => { if (e.target === viewer) closeViewer(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && viewer.classList.contains("show")) closeViewer(); });
+  webGrid.addEventListener("click", e => {
+    const b = e.target.closest("[data-launch]");
+    if (b) openViewer(WEB[+b.dataset.launch]);
+  });
+
+  document.getElementById("nav-count").textContent = WEB.length + " web apps";
+})();
+</script>
+</body>
+</html>

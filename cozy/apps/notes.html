@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Notes · The Cozy Toolbox</title>
+  <meta name="description" content="Tiny sticky notes with a speedy search box.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body class="app-page" data-root=".." style="--accent:#E8B400; --accent-soft:#FFF3CC;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/memo.png" alt="">
+      <div>
+        <h1>Simple Notes</h1>
+        <p>Tiny sticky notes with a speedy search box.</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2 id="editor-title">✏️ New note</h2>
+      <div class="field" style="margin-bottom:12px;">
+        <label for="n-title">Title</label>
+        <input id="n-title" class="input" type="text" placeholder="Give it a little name…" maxlength="80">
+      </div>
+      <div class="field">
+        <label for="n-body">Note</label>
+        <textarea id="n-body" class="input" placeholder="Write anything — ideas, lists, doodles in words…" maxlength="4000"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn" id="save-note">💾 Save note</button>
+        <button class="btn btn-ghost" id="cancel-edit" style="display:none;">Cancel edit</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>🗂️ My notes <span class="hint" id="note-count"></span></h2>
+      <div class="field">
+        <label for="n-search">Search</label>
+        <input id="n-search" class="input" type="search" placeholder="Type a few characters to find a note… 🔍">
+      </div>
+      <div class="notes-grid" id="notes-grid"></div>
+      <div class="empty-state" id="notes-empty">No notes yet — write your first one above ☝️</div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      let notes = CB.store.get("notes:items", []);
+      let editingId = null;
+
+      const $title = document.getElementById("n-title");
+      const $body = document.getElementById("n-body");
+      const $search = document.getElementById("n-search");
+      const $grid = document.getElementById("notes-grid");
+      const $empty = document.getElementById("notes-empty");
+
+      const save = () => CB.store.set("notes:items", notes);
+
+      /* Another tab edited the notes — adopt its version instead of overwriting it on next save. */
+      window.addEventListener("storage", e => {
+        if (e.key !== "cozy:notes:items" || e.newValue === null) return;
+        notes = CB.store.get("notes:items", []);
+        if (editingId && !notes.some(n => n.id === editingId)) editingId = null;
+        render();
+      });
+
+      function highlight(text, q) {
+        const safe = CB.esc(text);
+        if (!q) return safe;
+        const rx = new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+        return safe.replace(rx, "<mark>$1</mark>");
+      }
+
+      function startNew() {
+        editingId = null;
+        $title.value = ""; $body.value = "";
+        document.getElementById("editor-title").textContent = "✏️ New note";
+        document.getElementById("cancel-edit").style.display = "none";
+        $title.focus();
+      }
+
+      function saveNote() {
+        const title = $title.value.trim();
+        const body = $body.value.trim();
+        if (!title && !body) return CB.toast("Write something first ☝️");
+        if (editingId) {
+          const n = notes.find(x => x.id === editingId);
+          n.title = title || "(untitled)"; n.body = body; n.updated = Date.now();
+          CB.toast("Note updated 💫");
+        } else {
+          notes.unshift({ id: CB.uid(), title: title || "(untitled)", body, updated: Date.now() });
+          CB.toast("Note saved 🌟");
+        }
+        save(); render(); startNew();
+      }
+
+      function render() {
+        const q = $search.value.trim().toLowerCase();
+        const shown = notes.filter(n =>
+          !q || (n.title + " " + n.body).toLowerCase().includes(q));
+        document.getElementById("note-count").textContent =
+          notes.length ? `· ${notes.length} saved` : "";
+        $empty.style.display = shown.length ? "none" : "block";
+
+        $grid.innerHTML = shown.map(n => `
+          <article class="note-card">
+            <h3>${highlight(n.title, q)}</h3>
+            ${n.body ? `<p>${highlight(n.body, q)}</p>` : ""}
+            <div class="note-meta">
+              <span>${CB.fmtDate(n.updated)}</span>
+              <span>
+                <button class="icon-btn" data-act="edit" data-id="${n.id}" title="Edit" aria-label="Edit note">✏️</button>
+                <button class="icon-btn" data-act="del" data-id="${n.id}" title="Delete" aria-label="Delete note">🗑️</button>
+              </span>
+            </div>
+          </article>`).join("");
+      }
+
+      $grid.addEventListener("click", e => {
+        const btn = e.target.closest("[data-act]");
+        if (!btn) return;
+        const n = notes.find(x => x.id === btn.dataset.id);
+        if (!n) return;
+        if (btn.dataset.act === "del") {
+          notes = notes.filter(x => x.id !== n.id);
+          if (editingId === n.id) startNew();
+          save(); render(); CB.toast("Note deleted 🗑️");
+        } else {
+          editingId = n.id;
+          $title.value = n.title === "(untitled)" ? "" : n.title;
+          $body.value = n.body;
+          document.getElementById("editor-title").textContent = "✏️ Editing note";
+          document.getElementById("cancel-edit").style.display = "inline-flex";
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          $title.focus();
+        }
+      });
+
+      document.getElementById("save-note").addEventListener("click", saveNote);
+      document.getElementById("cancel-edit").addEventListener("click", startNew);
+      $search.addEventListener("input", render);
+      document.addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && document.activeElement.closest(".panel")) saveNote();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

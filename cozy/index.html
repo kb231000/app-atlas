@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Cozy Toolbox — handy little mini apps</title>
+  <meta name="description" content="A warm little shelf of handy mini apps — convert, calculate, play, and stay organized. No installs, no fuss; your data stays on your device.">
+  <link rel="icon" type="image/png" href="assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .hero-art .float-img.tool-1 { width: 118px; top: 6%;  left: 12%; --tilt: -8deg; }
+    .hero-art .float-img.tool-2 { width: 92px;  top: 2%;  right: 16%; --tilt: 10deg; animation-delay: .7s; }
+    .hero-art .float-img.tool-3 { width: 84px;  bottom: 8%; left: 4%;  --tilt: 6deg;  animation-delay: 1.2s; }
+    .hero-art .float-img.tool-4 { width: 96px;  bottom: 0;  right: 6%; --tilt: -12deg; animation-delay: .4s; }
+    .hero-art .float-img.tool-5 { width: 64px;  top: 44%; right: 0;   --tilt: 14deg; animation-delay: 1s; }
+    .hero-art .blob.b1 { width: 230px; height: 210px; background: #FFE3C2; top: 12%; right: 10%; }
+    .hero-art .blob.b2 { width: 150px; height: 140px; background: #FFEFD0; bottom: 4%; left: 10%; }
+  </style>
+</head>
+<body data-root=".">
+
+  <section class="hero">
+    <div>
+      <h1>Your cozy corner of<br><span class="squiggle">handy little apps</span></h1>
+      <p class="lead">Convert units, remember your pills, flip a coin, mind your budget, and play a quick quiz —
+        all on one warm little shelf. Nothing to install, and everything you type stays on your own device.</p>
+      <div class="hero-stats">
+        <span class="stat">🧰 10 apps live</span>
+        <span class="stat">🚫 0 installs needed</span>
+        <span class="stat">🔒 Data stays local</span>
+      </div>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <span class="blob b1"></span>
+      <span class="blob b2"></span>
+      <img class="float-img tool-1" src="assets/img/coin.png" alt="">
+      <img class="float-img tool-2" src="assets/img/notepad.png" alt="">
+      <img class="float-img tool-3" src="assets/img/pill.png" alt="">
+      <img class="float-img tool-4" src="assets/img/game-die.png" alt="">
+      <img class="float-img tool-5" src="assets/img/sparkles.png" alt="">
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <div class="chips" id="chips"></div>
+    <div class="search-wrap">
+      <input id="app-search" type="search" placeholder="Search the toolbox…" aria-label="Search apps">
+    </div>
+  </div>
+
+  <section class="grid" id="app-grid" aria-label="All mini apps"></section>
+
+  <script src="apps.js"></script>
+  <script src="assets/js/common.js"></script>
+  <script>
+    (function () {
+      const grid = document.getElementById("app-grid");
+      const chipsBox = document.getElementById("chips");
+      const search = document.getElementById("app-search");
+      let activeCat = "All";
+
+      const cats = ["All", ...new Set(window.COZY_APPS.map(a => a.category))];
+      chipsBox.innerHTML = cats.map(c =>
+        `<button class="chip${c === "All" ? " active" : ""}" data-cat="${c}">${c === "All" ? "✨ All" : c}</button>`
+      ).join("");
+
+      function render() {
+        const q = search.value.trim().toLowerCase();
+        const list = window.COZY_APPS.filter(a =>
+          (activeCat === "All" || a.category === activeCat) &&
+          (!q || (a.name + " " + a.tagline + " " + a.category).toLowerCase().includes(q))
+        );
+        grid.innerHTML = list.length ? list.map(a => `
+          <a class="app-card" href="${a.url}" style="--accent:${a.accent}">
+            <span class="icon-wrap"><img src="${a.img}" alt=""></span>
+            <h3>${CB.esc(a.name)}</h3>
+            <p>${CB.esc(a.tagline)}</p>
+            <span class="card-meta">
+              <span class="cat-tag">${a.category}</span>
+              <span class="open-arrow">Open →</span>
+            </span>
+          </a>`).join("")
+          : `<div class="empty-note">🔍 Nothing in that drawer… try another word!</div>`;
+      }
+
+      chipsBox.addEventListener("click", e => {
+        const chip = e.target.closest(".chip");
+        if (!chip) return;
+        activeCat = chip.dataset.cat;
+        CB.$$(".chip", chipsBox).forEach(c => c.classList.toggle("active", c === chip));
+        render();
+      });
+      search.addEventListener("input", render);
+      render();
+    })();
+  </script>
+</body>
+</html>

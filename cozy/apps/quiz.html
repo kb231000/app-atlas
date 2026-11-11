@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz Time · The Cozy Toolbox</title>
+  <meta name="description" content="Bite-size trivia bursts — General, Science and Fun Facts.">
+  <link rel="icon" type="image/png" href="../assets/img/toolbox.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .screen { display: none; }
+    .screen.on { display: block; }
+    .score-big { font-family: var(--font-head); font-size: 3rem; font-weight: 700; text-align: center; }
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0; }
+  </style>
+</head>
+<body class="app-page" data-root=".." style="--accent:#A66CFF; --accent-soft:#F1E9FE;">
+
+  <main class="app-shell">
+    <div class="app-head">
+      <img class="app-head-icon" src="../assets/img/brain.png" alt="">
+      <div>
+        <h1>Quiz Time</h1>
+        <p>Bite-size trivia bursts — how many can you nail?</p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <!-- setup -->
+      <div class="screen on" id="scr-setup">
+        <h2>🎯 Pick a category</h2>
+        <div class="cat-grid" id="cat-pick"></div>
+        <h2>🔢 How many questions?</h2>
+        <div class="chips" id="count-pick" style="margin:10px 0 18px;">
+          <button class="chip" data-n="5">Quick · 5</button>
+          <button class="chip active" data-n="10">Classic · 10</button>
+        </div>
+        <button class="btn" id="start-btn" style="font-size:1.1rem; padding:13px 34px;">🚀 Start quiz</button>
+        <p class="hint" id="best-line" style="margin-top:14px;"></p>
+      </div>
+
+      <!-- game -->
+      <div class="screen" id="scr-game">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span class="hint" id="q-pos">Question 1 / 10</span>
+          <span class="hint" id="q-score">Score 0</span>
+        </div>
+        <div class="q-progress"><div class="bar-fill" id="q-bar" style="width:0%"></div></div>
+        <div class="q-question" id="q-question"></div>
+        <div class="q-opts" id="q-opts"></div>
+        <div class="q-feedback" id="q-feedback"></div>
+        <button class="btn" id="next-btn" style="display:none; margin-top:10px;">Next →</button>
+      </div>
+
+      <!-- end -->
+      <div class="screen" id="scr-end">
+        <div class="score-big" id="end-score">8 / 10</div>
+        <p style="text-align:center; font-weight:800; font-size:1.1rem;" id="end-msg"></p>
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:18px; flex-wrap:wrap;">
+          <button class="btn" id="again-btn">🔁 Play again</button>
+          <button class="btn btn-ghost" id="menu-btn">🏠 Change category</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>🏅 Best scores</h2>
+      <div class="cat-breakdown" id="best-list"></div>
+    </section>
+  </main>
+
+  <script src="../assets/js/common.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      const BANK = [
+        // General
+        { c: "General", q: "How many continents are there on Earth?", a: ["7", "5", "6", "8"], k: 0 },
+        { c: "General", q: "What is the capital of Japan?", a: ["Tokyo", "Kyoto", "Osaka", "Seoul"], k: 0 },
+        { c: "General", q: "Which ocean is the largest?", a: ["Pacific", "Atlantic", "Indian", "Arctic"], k: 0 },
+        { c: "General", q: "Who painted the Mona Lisa?", a: ["Leonardo da Vinci", "Pablo Picasso", "Vincent van Gogh", "Claude Monet"], k: 0 },
+        { c: "General", q: "Which country has the largest population as of 2023?", a: ["India", "China", "United States", "Indonesia"], k: 0 },
+        { c: "General", q: "How many sides does a hexagon have?", a: ["6", "5", "7", "8"], k: 0 },
+        { c: "General", q: "Which language has the most native speakers?", a: ["Mandarin Chinese", "English", "Spanish", "Hindi"], k: 0 },
+        { c: "General", q: "Which sport uses a bat, a ball and wickets?", a: ["Cricket", "Baseball", "Hockey", "Polo"], k: 0 },
+        { c: "General", q: "What is the smallest country in the world?", a: ["Vatican City", "Monaco", "Nauru", "San Marino"], k: 0 },
+        { c: "General", q: "How many minutes are there in a full day?", a: ["1,440", "1,200", "1,860", "2,400"], k: 0 },
+        { c: "General", q: "Which mountain is the tallest above sea level?", a: ["Mount Everest", "K2", "Kangchenjunga", "Denali"], k: 0 },
+        { c: "General", q: "Which festival is known as the Festival of Lights?", a: ["Diwali", "Hanukkah", "Eid al-Fitr", "Lunar New Year"], k: 0 },
+        { c: "General", q: "How many colors are in a traditional rainbow?", a: ["7", "5", "6", "9"], k: 0 },
+        { c: "General", q: "Which country gifted the Statue of Liberty to the USA?", a: ["France", "United Kingdom", "Spain", "Italy"], k: 0 },
+        // Science
+        { c: "Science", q: "Which planet is known as the Red Planet?", a: ["Mars", "Venus", "Jupiter", "Mercury"], k: 0 },
+        { c: "Science", q: "Which gas do plants absorb from the air?", a: ["Carbon dioxide", "Oxygen", "Nitrogen", "Hydrogen"], k: 0 },
+        { c: "Science", q: "Roughly how fast is the speed of light?", a: ["300,000 km per second", "30,000 km per second", "3,000 km per second", "3 million km per second"], k: 0 },
+        { c: "Science", q: "What everyday liquid is H₂O?", a: ["Water", "Salt", "Sugar", "Vinegar"], k: 0 },
+        { c: "Science", q: "What is the largest planet in our solar system?", a: ["Jupiter", "Saturn", "Neptune", "Earth"], k: 0 },
+        { c: "Science", q: "How many bones are in the adult human body?", a: ["206", "180", "230", "256"], k: 0 },
+        { c: "Science", q: "Which force keeps us on the ground?", a: ["Gravity", "Magnetism", "Friction", "Tension"], k: 0 },
+        { c: "Science", q: "What is the chemical symbol for gold?", a: ["Au", "Ag", "Go", "Gd"], k: 0 },
+        { c: "Science", q: "Which planet has the most prominent rings?", a: ["Saturn", "Uranus", "Jupiter", "Neptune"], k: 0 },
+        { c: "Science", q: "What do bees collect to make honey?", a: ["Nectar", "Pollen grains only", "Dew", "Sap"], k: 0 },
+        { c: "Science", q: "What is the hardest natural substance?", a: ["Diamond", "Quartz", "Steel", "Granite"], k: 0 },
+        { c: "Science", q: "How many legs does a spider have?", a: ["8", "6", "10", "12"], k: 0 },
+        { c: "Science", q: "What does the Richter scale measure?", a: ["Earthquakes", "Wind speed", "Temperature", "Rainfall"], k: 0 },
+        { c: "Science", q: "Which organ pumps blood around the body?", a: ["Heart", "Lungs", "Liver", "Kidneys"], k: 0 },
+        // Fun Facts
+        { c: "Fun Facts", q: "What is the largest desert on Earth?", a: ["The Antarctic Desert", "The Sahara", "The Gobi", "The Arabian"], k: 0 },
+        { c: "Fun Facts", q: "Roughly how long is a giraffe's tongue?", a: ["About 50 cm", "About 10 cm", "About 1 m", "About 5 cm"], k: 0 },
+        { c: "Fun Facts", q: "Which mammal can truly fly?", a: ["Bat", "Flying squirrel", "Colugo", "Sugar glider"], k: 0 },
+        { c: "Fun Facts", q: "Botanically speaking, bananas are…", a: ["Berries", "Nuts", "Vegetables", "Drupes"], k: 0 },
+        { c: "Fun Facts", q: "How many hearts does an octopus have?", a: ["3", "1", "2", "8"], k: 0 },
+        { c: "Fun Facts", q: "Which country invented paper?", a: ["China", "Egypt", "Greece", "India"], k: 0 },
+        { c: "Fun Facts", q: "Properly stored honey never…", a: ["Spoils", "Crystallizes", "Smells sweet", "Dissolves"], k: 0 },
+        { c: "Fun Facts", q: "A group of flamingos is called a…", a: ["Flamboyance", "Flock of pink", "Parade", "Bloom"], k: 0 },
+        { c: "Fun Facts", q: "Which fruit wears its seeds on the outside?", a: ["Strawberry", "Kiwi", "Pomegranate", "Plum"], k: 0 },
+        { c: "Fun Facts", q: "What color is a polar bear's skin?", a: ["Black", "White", "Pink", "Gray"], k: 0 },
+        { c: "Fun Facts", q: "How many noses does a slug have?", a: ["4", "1", "2", "0"], k: 0 },
+        { c: "Fun Facts", q: "Which mammal famously can't jump?", a: ["Elephant", "Hippo", "Rhino", "Sloth"], k: 0 },
+        { c: "Fun Facts", q: "In summer the Eiffel Tower can grow about…", a: ["15 cm taller", "1 m taller", "5 cm shorter", "It never changes"], k: 0 }
+      ];
+      const CATS = ["Mixed", "General", "Science", "Fun Facts"];
+
+      let pool = [], qIndex = 0, score = 0, answered = false;
+      let chosenCat = "Mixed", chosenN = 10;
+
+      const $ = id => document.getElementById(id);
+      const show = id => CB.$$(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+
+      const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+      /* Bests are stored per category AND per quiz length as {s, of}, so a 5-question
+         run never shows as "5/10" and comparisons only happen between equal runs.
+         Legacy plain-number values (always 10-question) are migrated on read. */
+      function bestKey() { return "quiz:best:" + chosenCat + ":" + chosenN; }
+      function bestVal() {
+        const b = CB.store.get(bestKey(), null);
+        if (b === null) return null;
+        if (typeof b === "number") return { s: b, of: 10 }; // pre-fix format
+        return (typeof b === "object" && Number.isFinite(b.s) && Number.isFinite(b.of) && b.of > 0) ? b : null;
+      }
+
+      function paintSetup() {
+        $("best-line").textContent = bestVal() !== null
+          ? `🏅 Your best in ${chosenCat} (${chosenN} questions): ${bestVal().s} / ${bestVal().of}` : "";
+        $("best-list").innerHTML = CATS.map(c => {
+          const b = CB.store.get("quiz:best:" + c + ":" + chosenN, null);
+          const shown = (b !== null && typeof b === "number") ? { s: b, of: 10 } : b;
+          return `<div class="cat-row"><span>${c === "Mixed" ? "🌈 " + c : c}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${shown === null ? 0 : Math.min(100, shown.s / shown.of * 100)}%"></div></div>
+            <span class="amt">${shown === null ? "—" : shown.s + "/" + shown.of}</span></div>`;
+        }).join("");
+      }
+
+      function start() {
+        const src = chosenCat === "Mixed" ? BANK : BANK.filter(q => q.c === chosenCat);
+        pool = shuffle(src).slice(0, Math.min(chosenN, src.length)).map(q => {
+          const opts = shuffle(q.a.map((t, i) => ({ t, correct: i === q.k })));
+          return { q: q.q, opts };
+        });
+        qIndex = 0; score = 0;
+        show("scr-game");
+        renderQ();
+      }
+
+      function renderQ() {
+        answered = false;
+        const item = pool[qIndex];
+        $("q-pos").textContent = `Question ${qIndex + 1} / ${pool.length}`;
+        $("q-score").textContent = `Score ${score}`;
+        $("q-bar").style.width = (qIndex / pool.length * 100) + "%";
+        $("q-question").textContent = item.q;
+        $("q-feedback").textContent = ""; $("q-feedback").className = "q-feedback";
+        $("next-btn").style.display = "none";
+        $("q-opts").innerHTML = item.opts.map((o, i) =>
+          `<button class="q-opt" data-i="${i}"><span class="q-key">${"ABCD"[i]}</span>${CB.esc(o.t)}</button>`).join("");
+      }
+
+      $("q-opts").addEventListener("click", e => {
+        const btn = e.target.closest(".q-opt");
+        if (!btn || answered) return;
+        answered = true;
+        const item = pool[qIndex];
+        const pick = +btn.dataset.i;
+        const correct = item.opts[pick].correct;
+        CB.$$(".q-opt").forEach((b, i) => {
+          b.disabled = true;
+          if (item.opts[i].correct) b.classList.add("correct");
+        });
+        const fb = $("q-feedback");
+        if (correct) {
+          score++;
+          fb.textContent = "✅ Correct! Lovely work."; fb.classList.add("good");
+          CB.confetti(window.innerWidth / 2, window.innerHeight * 0.35, 30);
+        } else {
+          btn.classList.add("wrong");
+          fb.textContent = "❌ Not quite — the green one is right."; fb.classList.add("bad");
+        }
+        $("q-score").textContent = `Score ${score}`;
+        $("next-btn").style.display = "inline-flex";
+        $("next-btn").textContent = qIndex + 1 >= pool.length ? "See results 🏁" : "Next →";
+      });
+
+      $("next-btn").addEventListener("click", () => {
+        qIndex++;
+        if (qIndex < pool.length) { renderQ(); return; }
+        finish();
+      });
+
+      function finish() {
+        $("q-bar").style.width = "100%";
+        $("end-score").textContent = `${score} / ${pool.length}`;
+        const pct = score / pool.length;
+        $("end-msg").textContent =
+          pct === 1 ? "Perfect score! Absolute superstar! 🌟"
+            : pct >= 0.7 ? "Brilliant! Your brain is toasty warm 🧠🔥"
+              : pct >= 0.4 ? "Nice effort — a little more sparkle next time ✨"
+                : "Warm-up round done — try again! 💪";
+        const best = bestVal();
+        if (best === null || (best.of === pool.length && score > best.s)) {
+          CB.store.set(bestKey(), { s: score, of: pool.length });
+          CB.toast("🏆 New best score!");
+        }
+        if (pct >= 0.7) CB.confetti(window.innerWidth / 2, window.innerHeight * 0.3, 120);
+        paintSetup();
+        show("scr-end");
+      }
+
+      /* setup UI */
+      $("cat-pick").innerHTML = CATS.map((c, i) =>
+        `<button class="chip${i === 0 ? " active" : ""}" data-cat="${c}">${c === "Mixed" ? "🌈 " + c : c}</button>`).join("");
+      $("cat-pick").addEventListener("click", e => {
+        const chip = e.target.closest(".chip"); if (!chip) return;
+        chosenCat = chip.dataset.cat;
+        CB.$$(".chip", $("cat-pick")).forEach(x => x.classList.toggle("active", x === chip));
+        paintSetup();
+      });
+      $("count-pick").addEventListener("click", e => {
+        const chip = e.target.closest(".chip"); if (!chip) return;
+        chosenN = +chip.dataset.n;
+        CB.$$(".chip", $("count-pick")).forEach(x => x.classList.toggle("active", x === chip));
+        paintSetup();
+      });
+      $("start-btn").addEventListener("click", start);
+      $("again-btn").addEventListener("click", start);
+      $("menu-btn").addEventListener("click", () => { show("scr-setup"); paintSetup(); });
+
+      paintSetup();
+    })();
+  </script>
+</body>
+</html>
